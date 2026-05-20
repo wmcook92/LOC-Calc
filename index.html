@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Line of Credit Amortization Calculator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      body { background: #fff !important; }
+      .print-card { box-shadow: none !important; border: 1px solid #ddd !important; }
+    }
+    input[type="number"] { appearance: textfield; }
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+  <main class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+    <section class="mb-6">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p class="text-sm font-semibold tracking-wide uppercase text-cyan-300">Line of Credit Calculator</p>
+          <h1 class="text-3xl sm:text-4xl font-bold mt-1">Customer Amortization Schedule</h1>
+          <p class="text-slate-300 mt-2 max-w-3xl">Recreates the Excel LOC model: weekly or monthly payments, 18/24 month terms, calculated payment, total payback, interest cost, and exportable customer schedules.</p>
+        </div>
+        <div class="flex flex-wrap gap-2 no-print">
+          <button id="exportCsv" class="rounded-xl bg-cyan-400 text-slate-950 font-semibold px-4 py-2 hover:bg-cyan-300">Export CSV</button>
+          <button id="exportExcel" class="rounded-xl bg-emerald-400 text-slate-950 font-semibold px-4 py-2 hover:bg-emerald-300">Export Excel</button>
+          <button onclick="window.print()" class="rounded-xl bg-slate-800 border border-slate-700 px-4 py-2 hover:bg-slate-700">Print / Save PDF</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <aside class="lg:col-span-4 xl:col-span-3 print-card rounded-2xl bg-white/10 border border-white/10 shadow-xl p-5 h-fit">
+        <h2 class="text-xl font-bold mb-4">Inputs</h2>
+        <div class="space-y-4">
+          <label class="block">
+            <span class="text-sm text-slate-300">Customer name</span>
+            <input id="customerName" class="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2" value="Sample Customer" />
+          </label>
+          <label class="block">
+            <span class="text-sm text-slate-300">Today's date</span>
+            <input id="todayDate" type="date" class="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2" />
+          </label>
+          <label class="block">
+            <span class="text-sm text-slate-300">Planned draw date</span>
+            <input id="drawDate" type="date" class="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2" />
+            <span class="text-xs text-slate-400">Leave blank to use today's date.</span>
+          </label>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="block">
+              <span class="text-sm text-slate-300">APR</span>
+              <div class="relative mt-1">
+                <input id="apr" type="number" min="0" step="0.01" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 pr-8" value="69.5" />
+                <span class="absolute right-3 top-2 text-slate-400">%</span>
+              </div>
+            </label>
+            <label class="block">
+              <span class="text-sm text-slate-300">Term</span>
+              <select id="termMonths" class="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2">
+                <option value="18" selected>18 months</option>
+                <option value="24">24 months</option>
+              </select>
+            </label>
+          </div>
+          <label class="block">
+            <span class="text-sm text-slate-300">Payment frequency</span>
+            <select id="frequency" class="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2">
+              <option value="Weekly">Weekly</option>
+              <option value="Monthly" selected>Monthly</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="text-sm text-slate-300">Planned draw amount</span>
+            <div class="relative mt-1">
+              <span class="absolute left-3 top-2 text-slate-400">$</span>
+              <input id="amount" type="number" min="0" step="100" class="w-full rounded-xl bg-slate-900 border border-slate-700 pl-8 pr-3 py-2" value="75000" />
+            </div>
+          </label>
+          <button id="resetDefaults" class="no-print w-full rounded-xl bg-slate-800 border border-slate-700 px-4 py-2 hover:bg-slate-700">Reset to workbook sample</button>
+        </div>
+      </aside>
+
+      <section class="lg:col-span-8 xl:col-span-9 space-y-6">
+        <div class="grid sm:grid-cols-2 xl:grid-cols-4 gap-4" id="summaryCards"></div>
+
+        <div class="print-card rounded-2xl bg-white/10 border border-white/10 shadow-xl overflow-hidden">
+          <div class="p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-white/10">
+            <div>
+              <h2 class="text-xl font-bold">Customer Schedule</h2>
+              <p id="scheduleSubtitle" class="text-sm text-slate-300 mt-1"></p>
+            </div>
+            <input id="tableFilter" placeholder="Filter schedule..." class="no-print rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 w-full sm:w-64" />
+          </div>
+          <div class="overflow-auto max-h-[680px]">
+            <table class="min-w-full text-sm" id="scheduleTable">
+              <thead class="sticky top-0 bg-slate-900 text-slate-200 z-10">
+                <tr>
+                  <th class="text-left p-3 font-semibold">Payment #</th>
+                  <th class="text-left p-3 font-semibold">Due Date</th>
+                  <th class="text-right p-3 font-semibold">Payment</th>
+                  <th class="text-right p-3 font-semibold">Beginning Principal</th>
+                  <th class="text-right p-3 font-semibold">Interest Paid</th>
+                  <th class="text-right p-3 font-semibold">Principal Paid</th>
+                  <th class="text-right p-3 font-semibold">Ending Principal</th>
+                  <th class="text-right p-3 font-semibold">Cumulative Interest</th>
+                </tr>
+              </thead>
+              <tbody id="scheduleBody" class="divide-y divide-white/10"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const inputs = ["customerName", "todayDate", "drawDate", "apr", "termMonths", "frequency", "amount"];
+let currentSchedule = [];
+let currentSummary = {};
+
+function isoDate(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function localDateFromInput(value) {
+  if (!value) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function formatDate(date) {
+  return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+function formatCurrency(value) {
+  return value.toLocaleString(undefined, { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatPct(value) {
+  return (value * 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "%";
+}
+
+function addMonths(date, months) {
+  const d = new Date(date.getTime());
+  const desiredDay = d.getDate();
+  d.setMonth(d.getMonth() + months, 1);
+  const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(desiredDay, daysInMonth));
+  return d;
+}
+
+function firstPaymentDate(drawOrToday, frequency) {
+  const d = new Date(drawOrToday.getTime());
+  if (frequency === "Weekly") {
+    // Excel formula equivalent: date + MOD(4 - WEEKDAY(date), 7), where Wednesday is 4 in Excel's default WEEKDAY.
+    const excelWeekday = d.getDay() + 1;
+    const offset = (4 - excelWeekday + 7) % 7;
+    d.setDate(d.getDate() + offset);
+    return d;
+  }
+  if (d.getDate() <= 19) return new Date(d.getFullYear(), d.getMonth(), 26);
+  return new Date(d.getFullYear(), d.getMonth() + 1, 26);
+}
+
+function nextPaymentDate(previousDate, frequency) {
+  const d = new Date(previousDate.getTime());
+  if (frequency === "Weekly") {
+    d.setDate(d.getDate() + 7);
+    return d;
+  }
+  return addMonths(d, 1);
+}
+
+function calculate() {
+  const today = localDateFromInput($("todayDate").value) || new Date();
+  const draw = localDateFromInput($("drawDate").value) || today;
+  const apr = Math.max(Number($("apr").value || 0), 0) / 100;
+  const termMonths = Number($("termMonths").value || 18);
+  const frequency = $("frequency").value;
+  const principal = Math.max(Number($("amount").value || 0), 0);
+  const periodsPerYear = frequency === "Weekly" ? 52 : 12;
+  const periodicRate = apr / periodsPerYear;
+  const paymentCount = frequency === "Weekly" ? Math.round(termMonths * 52 / 12) : termMonths;
+  const firstDue = firstPaymentDate(draw, frequency);
+  const payment = periodicRate === 0 ? principal / paymentCount : (periodicRate * principal * Math.pow(1 + periodicRate, paymentCount)) / (Math.pow(1 + periodicRate, paymentCount) - 1);
+
+  let balance = principal;
+  let cumulativeInterest = 0;
+  let dueDate = firstDue;
+  const schedule = [];
+
+  for (let i = 1; i <= paymentCount; i++) {
+    const beginningPrincipal = balance;
+    const interestPaid = beginningPrincipal * periodicRate;
+    let paymentDue = payment;
+    let principalPaid = paymentDue - interestPaid;
+
+    if (i === paymentCount || principalPaid > beginningPrincipal) {
+      principalPaid = beginningPrincipal;
+      paymentDue = interestPaid + principalPaid;
+    }
+
+    balance = Math.max(0, beginningPrincipal - principalPaid);
+    cumulativeInterest += interestPaid;
+    schedule.push({
+      number: i,
+      dueDate: new Date(dueDate.getTime()),
+      payment: paymentDue,
+      beginningPrincipal,
+      interestPaid,
+      principalPaid,
+      endingPrincipal: balance,
+      cumulativeInterest
+    });
+    dueDate = nextPaymentDate(dueDate, frequency);
+  }
+
+  currentSchedule = schedule;
+  currentSummary = {
+    customerName: $("customerName").value.trim() || "Customer",
+    today,
+    draw,
+    apr,
+    termMonths,
+    frequency,
+    principal,
+    periodicRate,
+    paymentCount,
+    firstDue,
+    payment: schedule[0]?.payment || 0,
+    totalPayback: schedule.reduce((sum, row) => sum + row.payment, 0),
+    totalInterest: schedule.reduce((sum, row) => sum + row.interestPaid, 0),
+    simpleInterest: principal ? schedule.reduce((sum, row) => sum + row.interestPaid, 0) / principal : 0
+  };
+
+  renderSummary();
+  renderTable();
+}
+
+function renderSummary() {
+  const cards = [
+    [currentSummary.frequency + " Payment", formatCurrency(currentSummary.payment), "Calculated payment"],
+    ["Total Payback", formatCurrency(currentSummary.totalPayback), `${currentSummary.paymentCount} payments`],
+    ["Total Interest Cost", formatCurrency(currentSummary.totalInterest), formatPct(currentSummary.simpleInterest) + " simple interest"],
+    ["First Payment Due", formatDate(currentSummary.firstDue), `Periodic rate: ${formatPct(currentSummary.periodicRate)}`]
+  ];
+  $("summaryCards").innerHTML = cards.map(([title, value, detail]) => `
+    <article class="print-card rounded-2xl bg-white/10 border border-white/10 shadow-xl p-5">
+      <p class="text-sm text-slate-300">${title}</p>
+      <p class="text-2xl font-bold mt-1">${value}</p>
+      <p class="text-xs text-slate-400 mt-2">${detail}</p>
+    </article>
+  `).join("");
+  $("scheduleSubtitle").textContent = `${currentSummary.customerName} • ${formatCurrency(currentSummary.principal)} draw • ${formatPct(currentSummary.apr)} APR • ${currentSummary.termMonths} months • ${currentSummary.frequency}`;
+}
+
+function renderTable() {
+  const filter = $("tableFilter").value.toLowerCase();
+  const rows = currentSchedule.filter(row => {
+    const haystack = [row.number, formatDate(row.dueDate), row.payment, row.beginningPrincipal, row.interestPaid, row.principalPaid, row.endingPrincipal, row.cumulativeInterest].join(" ").toLowerCase();
+    return haystack.includes(filter);
+  });
+  $("scheduleBody").innerHTML = rows.map(row => `
+    <tr class="hover:bg-white/5">
+      <td class="p-3">${row.number}</td>
+      <td class="p-3 whitespace-nowrap">${formatDate(row.dueDate)}</td>
+      <td class="p-3 text-right whitespace-nowrap">${formatCurrency(row.payment)}</td>
+      <td class="p-3 text-right whitespace-nowrap">${formatCurrency(row.beginningPrincipal)}</td>
+      <td class="p-3 text-right whitespace-nowrap">${formatCurrency(row.interestPaid)}</td>
+      <td class="p-3 text-right whitespace-nowrap">${formatCurrency(row.principalPaid)}</td>
+      <td class="p-3 text-right whitespace-nowrap">${formatCurrency(row.endingPrincipal)}</td>
+      <td class="p-3 text-right whitespace-nowrap">${formatCurrency(row.cumulativeInterest)}</td>
+    </tr>
+  `).join("");
+}
+
+function scheduleRowsForExport() {
+  const header = ["Payment #", "Payment Due Date", "Payment", "Beginning Principal", "Interest Paid", "Principal Paid", "Ending Principal", "Cumulative Interest"];
+  const rows = currentSchedule.map(row => [
+    row.number,
+    isoDate(row.dueDate),
+    row.payment.toFixed(2),
+    row.beginningPrincipal.toFixed(2),
+    row.interestPaid.toFixed(2),
+    row.principalPaid.toFixed(2),
+    row.endingPrincipal.toFixed(2),
+    row.cumulativeInterest.toFixed(2)
+  ]);
+  return { header, rows };
+}
+
+function exportCsv() {
+  const { header, rows } = scheduleRowsForExport();
+  const meta = [
+    ["Customer", currentSummary.customerName],
+    ["Today's Date", isoDate(currentSummary.today)],
+    ["Planned Draw Date", isoDate(currentSummary.draw)],
+    ["APR", (currentSummary.apr * 100).toFixed(2) + "%"],
+    ["Term Months", currentSummary.termMonths],
+    ["Payment Frequency", currentSummary.frequency],
+    ["Planned Draw Amount", currentSummary.principal.toFixed(2)],
+    ["Periodic Rate", (currentSummary.periodicRate * 100).toFixed(6) + "%"],
+    ["Payments", currentSummary.paymentCount],
+    ["First Payment Due Date", isoDate(currentSummary.firstDue)],
+    ["Calculated Payment", currentSummary.payment.toFixed(2)],
+    ["Total Payback", currentSummary.totalPayback.toFixed(2)],
+    ["Total Interest Cost", currentSummary.totalInterest.toFixed(2)],
+    ["Simple Interest", (currentSummary.simpleInterest * 100).toFixed(2) + "%"],
+    [],
+    header,
+    ...rows
+  ];
+  const csv = meta.map(row => row.map(value => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",")).join("\n");
+  downloadBlob(csv, "text/csv;charset=utf-8", fileBaseName() + ".csv");
+}
+
+function exportExcel() {
+  const { header, rows } = scheduleRowsForExport();
+  const summaryRows = [
+    ["Customer", currentSummary.customerName],
+    ["Today's Date", isoDate(currentSummary.today)],
+    ["Planned Draw Date", isoDate(currentSummary.draw)],
+    ["APR", formatPct(currentSummary.apr)],
+    ["Term Months", currentSummary.termMonths],
+    ["Payment Frequency", currentSummary.frequency],
+    ["Planned Draw Amount", formatCurrency(currentSummary.principal)],
+    ["Periodic Rate", formatPct(currentSummary.periodicRate)],
+    ["Payments", currentSummary.paymentCount],
+    ["First Payment Due Date", isoDate(currentSummary.firstDue)],
+    ["Calculated Payment", formatCurrency(currentSummary.payment)],
+    ["Total Payback", formatCurrency(currentSummary.totalPayback)],
+    ["Total Interest Cost", formatCurrency(currentSummary.totalInterest)],
+    ["Simple Interest", formatPct(currentSummary.simpleInterest)]
+  ];
+  const table = `
+    <html><head><meta charset="utf-8"></head><body>
+    <h1>Line of Credit Amortization Schedule</h1>
+    <table border="1"><tbody>
+      ${summaryRows.map(r => `<tr><th align="left">${escapeHtml(r[0])}</th><td>${escapeHtml(r[1])}</td></tr>`).join("")}
+    </tbody></table><br/>
+    <table border="1"><thead><tr>${header.map(h => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead><tbody>
+      ${rows.map(r => `<tr>${r.map(cell => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")}
+    </tbody></table></body></html>`;
+  downloadBlob(table, "application/vnd.ms-excel;charset=utf-8", fileBaseName() + ".xls");
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[char]));
+}
+
+function fileBaseName() {
+  const safeCustomer = (currentSummary.customerName || "customer").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "customer";
+  return `${safeCustomer}-loc-amortization-${currentSummary.frequency.toLowerCase()}`;
+}
+
+function downloadBlob(content, type, filename) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function setDefaults() {
+  $("customerName").value = "Sample Customer";
+  $("todayDate").value = "2026-04-17";
+  $("drawDate").value = "2026-04-17";
+  $("apr").value = "69.5";
+  $("termMonths").value = "18";
+  $("frequency").value = "Monthly";
+  $("amount").value = "75000";
+  $("tableFilter").value = "";
+  calculate();
+}
+
+inputs.forEach(id => $(id).addEventListener("input", calculate));
+$("tableFilter").addEventListener("input", renderTable);
+$("exportCsv").addEventListener("click", exportCsv);
+$("exportExcel").addEventListener("click", exportExcel);
+$("resetDefaults").addEventListener("click", setDefaults);
+
+const today = new Date();
+$("todayDate").value = isoDate(today);
+$("drawDate").value = isoDate(today);
+calculate();
+</script>
+</body>
+</html>
